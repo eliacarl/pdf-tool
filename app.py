@@ -138,4 +138,7 @@ def remove_pages():
     return send_file(output, as_attachment=True, download_name=filename, mimetype='application/pdf')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Hole den Port aus der Umgebungsvariablen PORT, sonst nimm 5000 als Standard
+    port = int(os.environ.get("PORT", 5000))
+    # Lasse die Anwendung auf 0.0.0.0 lauschen, damit sie von außen erreichbar ist
+    app.run(debug=False, host='0.0.0.0', port=port)
