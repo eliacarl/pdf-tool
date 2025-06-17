@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>PDF Tool</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2em;
+    }
+    .drop-zone {
+      border: 2px dashed #ccc;
+      padding: 20px;
+      margin-top: 10px;
+      background-color: #f9f9f9;
+      min-height: 80px;
+    }
+    .file-item {
+      padding: 10px;
+      margin: 5px 0;
+      background-color: #e3e3e3;
+      cursor: move;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .file-item button {
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧰 PDF-Tool mit Drag & Drop</h1>
+
+  <!-- 🔀 MERGE -->
+  <h2>PDFs zusammenfügen</h2>
+  <form id="mergeForm">
+    <input type="file" id="pdfInput" accept="application/pdf" multiple><br><br>
+
+    <div id="fileList" class="drop-zone">
+      <p>Dateien auswählen oder hier ablegen.</p>
+    </div>
+
+    <label>Seiten (z. B. 1,3-5):</label><br>
+    <input type="text" name="pages" placeholder="optional"><br>
+
+    <label>Dateiname:</label><br>
+    <input type="text" name="filename" placeholder="optional"><br><br>
+
+    <button type="submit">Zusammenfügen</button>
+  </form>
+
+  <hr>
+
+  <!-- 🔍 TEXT EXTRAKT -->
+  <!--
+  <h2>Text extrahieren</h2>
+  <form action="/extract-text" method="post" enctype="multipart/form-data" target="_blank">
+    <input type="file" name="pdf" required>
+    <br>
+    <label>Seiten (z. B. 1,3-5):</label>
+    <input type="text" name="pages" placeholder="optional">
+    <br>
+    <button type="submit">Text extrahieren</button>
+  </form>
+  -->
+
+  <!-- ✂️ SPLIT -->
+  <h2>PDF splitten</h2>
+  <form action="/split" method="post" enctype="multipart/form-data">
+    <input type="file" name="pdf" required>
+    <br>
+    <label>Seiten (z. B. 1,3,5 oder leer für alle Seiten):</label>
+    <input type="text" name="pages" placeholder="z. B. 1,3-5">
+    <br>
+    <button type="submit">PDF splitten</button>
+  </form>
+
+  <!-- 🔄 ROTATE -->
+  <h2>Seiten drehen</h2>
+  <form action="/rotate" method="post" enctype="multipart/form-data">
+    <input type="file" name="pdf" required>
+    <br>
+    <label>Winkel (90, 180, 270):</label>
+    <input type="number" name="angle" value="90" required>
+    <br>
+    <label>Seiten (z. B. 2,4-5):</label>
+    <input type="text" name="pages" placeholder="optional">
+    <br>
+    <button type="submit">Drehen</button>
+  </form>
+
+  <!-- 🗑 REMOVE PAGES -->
+  <h2>Seiten entfernen</h2>
+  <form action="/remove-pages" method="post" enctype="multipart/form-data">
+    <input type="file" name="pdf" required>
+    <label>Seiten (z. B. 2,4-5):</label>
+    <input type="text" name="pages" required>
+    <button type="submit">Entfernen</button>
+  </form>
+
+  <!-- 📜 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <script>
+    const pdfInput = document.getElementById('pdfInput');
+    const fileList = document.getElementById('fileList');
+    const mergeForm = document.getElementById('mergeForm');
+    const files = [];
+
+    const sortable = new Sortable(fileList, {
+      animation: 150,
+      ghostClass: 'dragging'
+    });
+
+    function renderFileList() {
+      fileList.innerHTML = '';
+      files.forEach((file, index) => {
+        const div = document.createElement('div');
+        div.className = 'file-item';
+        div.dataset.filename = file.name;
+
+        const span = document.createElement('span');
+        span.textContent = file.name;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Entfernen';
+        removeBtn.type = 'button';
+        removeBtn.addEventListener('click', () => {
+          files.splice(index, 1);
+          renderFileList();
+        });
+
+        div.appendChild(span);
+        div.appendChild(removeBtn);
+        fileList.appendChild(div);
+      });
+    }
+
+    pdfInput.addEventListener('change', () => {
+      for (const file of pdfInput.files) {
+        files.push(file);
+      }
+      renderFileList();
+    });
+
+    // Verhindere Öffnen im Browser
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      window.addEventListener(eventName, e => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    });
+
+    fileList.addEventListener('drop', e => {
+      const droppedFiles = e.dataTransfer.files;
+      for (const file of droppedFiles) {
+        if (file.type === "application/pdf") {
+          files.push(file);
+        }
+      }
+      renderFileList();
+    });
+
+    mergeForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const formData = new FormData();
+
+      const orderedNames = [...fileList.children].map(div => div.dataset.filename);
+      orderedNames.forEach(name => {
+        const file = files.find(f => f.name === name);
+        if (file) formData.append('pdfs', file);
+      });
+
+      ['pages', 'filename'].forEach(name => {
+        const input = mergeForm.querySelector(`[name="${name}"]`);
+        if (input && input.value) {
+          formData.append(name, input.value);
+        }
+      });
+
+      fetch('/merge', {
+        method: 'POST',
+        body: formData
+      })
+      .then(res => res.blob())
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = formData.get('filename') || 'merged.pdf';
+        a.click();
+      });
+    });
+  </script>
+</body>
+</html>
